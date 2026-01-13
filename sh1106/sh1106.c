@@ -3,6 +3,7 @@
 // Helped out by: https://github.com/8TN/Raspberry-Pi-SH1106-oled-display
 
 #include <sys/types.h>
+#include <sys/syslimits.h>
 
 #include <fcntl.h>
 #include <libgpio.h>
@@ -16,8 +17,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define STBI_grey 1
+typedef unsigned char stbi_uc;
+extern stbi_uc *stbi_load(char const *filename, int *x, int *y, int *comp, int req_comp);
 
 #define DC_SELECT 25 // Selection between data transfer and command transfer.
 #define RESET 24
@@ -25,7 +27,8 @@
 #define SPI_FREQ_HZ 1000000 // 7629
 #define SPI_MODE 0b00       // XXX Idk what this does.
 
-#define PATH "car.png"
+#define PATH "anim"
+#define FRAMES 540
 
 static gpio_handle_t handle;
 static int spi_fd;
@@ -110,36 +113,52 @@ int main(void) {
 	gpio_pin_high(handle, RESET);
 	usleep(100000);
 
+	printf("Loading all images.\n");
+
+	uint8_t* frames[FRAMES];
+
+	for (size_t i = 0; i < FRAMES; i++) {
+		char path[PATH_MAX];
+		sprintf(path, "%s/~%04zu.png", PATH, i + 1);
+
+		printf("%s\n", path);
+
+		int x_res, y_res, channels;
+		uint8_t* const buf = stbi_load(path, &x_res, &y_res, &channels, STBI_grey);
+
+		printf("Loaded frame %zu, %dx%dx%d\n", i, x_res, y_res, channels);
+
+		assert(buf != NULL);
+		assert(x_res == 128);
+		assert(y_res == 64);
+
+		frames[i] = buf;
+	}
+
 	printf("Displaying.\n");
 
 	xfer(false, 1, (uint8_t[]) {0xAF}); // Display on.
 
-	int x_res, y_res, channels;
-	uint8_t* const buf = stbi_load(PATH, &x_res, &y_res, &channels, STBI_grey);
-
-	printf("Loaded image, %dx%dx%d\n", x_res, y_res, channels);
-
-	assert(buf != NULL);
-	assert(x_res == 128);
-	assert(y_res == 64);
-
 	bool fb[64][128] = {0};
 	float t = 0;
 
-	for (;;) {
+	for (size_t frame = 0; frame < FRAMES; frame++) {
 		for (size_t y = 1; y < 64 - 1; y++) {
 			for (size_t x = 0; x < 128; x++) {
-				fb[y][/*(int) (sin(t) * 40) + */x] = buf[y * 128 + x] > 0xFF / 2;
+				fb[y][/*(int) (sin(t) * 40) + */x] = frames[frame][y * 128 + x] > 0xFF / 2;
 			}
 		}
 
 		display(fb);
-		t += 0.05;
+		usleep(1000000. / 60 / 3);
+
+		if (frame == FRAMES - 1) {
+			frame = 210;
+		}
 	}
 
 	printf("Done.\n");
 
-	free(buf);
 	close(spi_fd);
 	gpio_close(handle);
 
