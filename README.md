@@ -2,4 +2,4 @@
 
 Diederik's melody box.
 
-![melody-box](untitled.png)
+![melody-box](model/render.png)
