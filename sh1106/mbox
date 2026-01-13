@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# PROVIDE: mbox
+# REQUIRE: FILESYSTEMS
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="mbox"
+rcvar="mbox_enable"
+desc="Start melody box software"
+start_cmd="${name}_start"
+stop_cmd=':'
+
+mbox_start()
+{
+	kldload spigen
+	cd /home/freebsd
+	./sh1106 &
+}
+
+load_rc_config $name
+
+run_rc_command "$1"
